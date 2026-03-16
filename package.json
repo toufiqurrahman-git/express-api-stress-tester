@@ -1,7 +1,7 @@
 {
   "name": "express-api-stress-tester",
-  "version": "1.0.0",
-  "description": "High-performance API stress testing and load testing tool capable of simulating up to 100k concurrent users",
+  "version": "2.0.0",
+  "description": "High-performance distributed API stress testing platform for Express.js APIs — simulate up to 10M concurrent virtual users",
   "type": "module",
   "main": "src/index.js",
   "exports": {
@@ -22,7 +22,12 @@
     "benchmark",
     "http",
     "concurrent",
-    "undici"
+    "undici",
+    "express",
+    "distributed",
+    "load-testing",
+    "worker-threads",
+    "api-testing"
   ],
   "author": "",
   "license": "MIT",
@@ -56,6 +61,7 @@
   "files": [
     "src/",
     "README.md",
-    "example-config.json"
+    "example-config.json",
+    "examples/"
   ]
 }

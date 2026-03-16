@@ -39,4 +39,31 @@ describe('HttpEngine', () => {
     const engine = new HttpEngine({ baseUrl: 'http://localhost:9999' });
     await expect(engine.close()).resolves.not.toThrow();
   });
+
+  test('request strips newline characters from headers', async () => {
+    const engine = new HttpEngine({
+      baseUrl: 'http://localhost:9999',
+      headers: { Authorization: 'Bearer token\r\n' },
+    });
+    let capturedHeaders;
+    engine.pool.request = async (opts) => {
+      capturedHeaders = opts.headers;
+      return {
+        statusCode: 200,
+        headers: {},
+        body: { text: async () => '' },
+      };
+    };
+
+    await engine.request({
+      headers: { 'X-Test': 'line1\nline2' },
+    });
+
+    expect(capturedHeaders).toEqual({
+      Authorization: 'Bearer token',
+      'X-Test': 'line1line2',
+    });
+
+    await engine.close();
+  });
 });

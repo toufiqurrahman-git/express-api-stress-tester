@@ -53,7 +53,7 @@ export class HttpEngine {
    * @returns {Promise<{ statusCode: number, headers: object, body: string, responseTime: number }>}
    */
   async request({ method = 'GET', path = '/', headers = {}, body = null } = {}) {
-    const mergedHeaders = { ...this.defaultHeaders, ...headers };
+    const mergedHeaders = normalizeHeaders({ ...this.defaultHeaders, ...headers });
 
     const start = process.hrtime.bigint();
 
@@ -87,4 +87,29 @@ export class HttpEngine {
   async close() {
     await this.pool.close();
   }
+}
+
+function normalizeHeaders(headers) {
+  const normalized = {};
+  for (const [key, value] of Object.entries(headers || {})) {
+    if (value === undefined || value === null) {
+      continue;
+    }
+    if (Array.isArray(value)) {
+      const cleaned = value
+        .filter((entry) => entry !== undefined && entry !== null)
+        .map((entry) => normalizeHeaderValue(entry));
+      if (cleaned.length > 0) {
+        normalized[key] = cleaned;
+      }
+      continue;
+    }
+    normalized[key] = normalizeHeaderValue(value);
+  }
+  return normalized;
+}
+
+function normalizeHeaderValue(value) {
+  const asString = typeof value === 'string' ? value : String(value);
+  return asString.replace(/[\r\n]+/g, '');
 }

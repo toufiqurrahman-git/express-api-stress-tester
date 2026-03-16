@@ -166,11 +166,8 @@ function isValidHeaderValue(value) {
 }
 
 function warnInvalidHeaderValue(key, value, warnedHeaderValues) {
-  if (!warnedHeaderValues) {
-    return;
-  }
   const type = typeof value;
-  const safeKey = typeof key === 'string' ? key.replace(/[\0\r\n]/g, '') : 'unknown';
+  const safeKey = key.replace(/[\0\r\n]/g, '');
   const signature = `${safeKey}:${type}`;
   if (warnedHeaderValues.has(signature)) {
     return;

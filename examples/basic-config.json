@@ -1,0 +1,14 @@
+{
+  "url": "https://jsonplaceholder.typicode.com/posts",
+  "method": "POST",
+  "concurrency": 10,
+  "duration": 5,
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "payload": {
+    "title": "{name}",
+    "body": "Stress test {uuid}",
+    "userId": "{randomInt}"
+  }
+}

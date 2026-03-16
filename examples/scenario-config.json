@@ -1,0 +1,15 @@
+{
+  "url": "https://jsonplaceholder.typicode.com",
+  "concurrency": 20,
+  "duration": 10,
+  "scenarios": [
+    {
+      "name": "userFlow",
+      "steps": [
+        { "url": "/users", "method": "GET" },
+        { "url": "/posts", "method": "GET" },
+        { "url": "/posts", "method": "POST" }
+      ]
+    }
+  ]
+}

@@ -82,8 +82,8 @@ describe('HttpEngine', () => {
     });
     const originalWrite = process.stderr.write;
     const writes = [];
-    process.stderr.write = (message) => {
-      writes.push(String(message));
+    process.stderr.write = (...args) => {
+      writes.push(String(args[0]));
       return true;
     };
 

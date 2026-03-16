@@ -96,6 +96,8 @@ describe('HttpEngine', () => {
       await engine.close();
     }
 
-    expect(writes.some((msg) => msg.includes('X-Invalid'))).toBe(true);
+    expect(
+      writes.some((msg) => msg.includes('X-Invalid') && msg.includes('object')),
+    ).toBe(true);
   });
 });

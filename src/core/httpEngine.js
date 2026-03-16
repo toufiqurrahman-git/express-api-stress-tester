@@ -34,7 +34,7 @@ export class HttpEngine {
     this.baseUrl = baseUrl;
     this.defaultHeaders = headers;
     this.timeout = timeout;
-    this.warnedHeaderValues = new Set();
+    this.warnedHeaderValues = new Map();
 
     this.pool = new Pool(baseUrl, {
       connections,
@@ -176,12 +176,12 @@ function warnInvalidHeaderValue(key, value, warnedHeaderValues) {
     return;
   }
   if (warnedHeaderValues.size >= MAX_WARNED_HEADER_VALUES) {
-    const oldest = warnedHeaderValues.values().next().value;
+    const oldest = warnedHeaderValues.keys().next().value;
     if (oldest) {
       warnedHeaderValues.delete(oldest);
     }
   }
-  warnedHeaderValues.add(signature);
+  warnedHeaderValues.set(signature, true);
   process.stderr.write(
     `[HttpEngine] Dropping header "${safeKey}" with unsupported value type "${type}".\n`,
   );

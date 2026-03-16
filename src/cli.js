@@ -4,7 +4,7 @@
  * CLI entry point for api-stress-tester.
  *
  * Usage:
- *   npx @toufiqur-rahman-tamkin/api-stress-tester config.json
+ *   npx express-api-stress-tester config.json
  *   node src/cli.js config.json
  */
 import { readFileSync } from 'node:fs';
@@ -16,10 +16,10 @@ async function main() {
 
   if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
     console.log(`
-  api-stress-tester – High-performance API stress testing tool
+  express-api-stress-tester – High-performance API stress testing tool
 
   Usage:
-    api-stress-tester <config.json>
+    express-api-stress-tester <config.json>
 
   Options:
     --help, -h    Show this help message

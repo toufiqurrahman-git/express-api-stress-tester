@@ -1,5 +1,5 @@
 {
-  "name": "@toufiqur-rahman-tamkin/api-stress-tester",
+  "name": "express-api-stress-tester",
   "version": "1.0.0",
   "description": "High-performance API stress testing and load testing tool capable of simulating up to 100k concurrent users",
   "type": "module",
@@ -8,7 +8,7 @@
     ".": "./src/index.js"
   },
   "bin": {
-    "api-stress-tester": "src/cli.js"
+    "express-api-stress-tester": "src/cli.js"
   },
   "scripts": {
     "test": "node --experimental-vm-modules node_modules/.bin/jest --forceExit",

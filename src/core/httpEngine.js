@@ -31,6 +31,7 @@ export class HttpEngine {
     this.baseUrl = baseUrl;
     this.defaultHeaders = headers;
     this.timeout = timeout;
+    this.warnedHeaderValues = new Set();
 
     this.pool = new Pool(baseUrl, {
       connections,
@@ -53,7 +54,10 @@ export class HttpEngine {
    * @returns {Promise<{ statusCode: number, headers: object, body: string, responseTime: number }>}
    */
   async request({ method = 'GET', path = '/', headers = {}, body = null } = {}) {
-    const mergedHeaders = normalizeHeaders({ ...this.defaultHeaders, ...headers });
+    const mergedHeaders = normalizeHeaders(
+      { ...this.defaultHeaders, ...headers },
+      this.warnedHeaderValues,
+    );
 
     const start = process.hrtime.bigint();
 
@@ -89,7 +93,7 @@ export class HttpEngine {
   }
 }
 
-function normalizeHeaders(headers) {
+function normalizeHeaders(headers, warnedHeaderValues) {
   const normalized = {};
   for (const [key, value] of Object.entries(headers || {})) {
     if (value === undefined || value === null) {
@@ -111,7 +115,7 @@ function normalizeHeaders(headers) {
             cleaned.push(cleanedEntry);
           }
         } else {
-          warnInvalidHeaderValue(normalizedKey, entry);
+          warnInvalidHeaderValue(normalizedKey, entry, warnedHeaderValues);
         }
       }
       if (cleaned.length > 0) {
@@ -121,7 +125,7 @@ function normalizeHeaders(headers) {
     }
 
     if (!isValidHeaderValue(value)) {
-      warnInvalidHeaderValue(normalizedKey, value);
+      warnInvalidHeaderValue(normalizedKey, value, warnedHeaderValues);
       continue;
     }
 
@@ -161,16 +165,18 @@ function isValidHeaderValue(value) {
   );
 }
 
-const warnedHeaderValues = new Set();
-
-function warnInvalidHeaderValue(key, value) {
+function warnInvalidHeaderValue(key, value, warnedHeaderValues) {
+  if (!warnedHeaderValues) {
+    return;
+  }
   const type = typeof value;
-  const signature = `${key}:${type}`;
+  const safeKey = typeof key === 'string' ? key.replace(/[\0\r\n]/g, '') : 'unknown';
+  const signature = `${safeKey}:${type}`;
   if (warnedHeaderValues.has(signature)) {
     return;
   }
   warnedHeaderValues.add(signature);
   process.stderr.write(
-    `[HttpEngine] Dropping header "${key}" with unsupported value type "${type}".\n`,
+    `[HttpEngine] Dropping header "${safeKey}" with unsupported value type "${type}".\n`,
   );
 }

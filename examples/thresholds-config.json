@@ -1,0 +1,11 @@
+{
+  "url": "https://jsonplaceholder.typicode.com/posts",
+  "method": "GET",
+  "concurrency": 100,
+  "duration": 15,
+  "thresholds": {
+    "maxErrorRate": 5,
+    "maxAvgLatency": 300,
+    "minRPS": 50
+  }
+}

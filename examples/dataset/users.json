@@ -1,0 +1,72 @@
+[
+  {
+    "id": 1,
+    "name": "Alice Johnson",
+    "email": "alice@example.com",
+    "role": "admin",
+    "age": 32
+  },
+  {
+    "id": 2,
+    "name": "Bob Smith",
+    "email": "bob@example.com",
+    "role": "user",
+    "age": 28
+  },
+  {
+    "id": 3,
+    "name": "Charlie Brown",
+    "email": "charlie@example.com",
+    "role": "user",
+    "age": 45
+  },
+  {
+    "id": 4,
+    "name": "Diana Prince",
+    "email": "diana@example.com",
+    "role": "moderator",
+    "age": 30
+  },
+  {
+    "id": 5,
+    "name": "Eve Wilson",
+    "email": "eve@example.com",
+    "role": "user",
+    "age": 25
+  },
+  {
+    "id": 6,
+    "name": "Frank Miller",
+    "email": "frank@example.com",
+    "role": "admin",
+    "age": 38
+  },
+  {
+    "id": 7,
+    "name": "Grace Lee",
+    "email": "grace@example.com",
+    "role": "user",
+    "age": 22
+  },
+  {
+    "id": 8,
+    "name": "Hank Patel",
+    "email": "hank@example.com",
+    "role": "moderator",
+    "age": 41
+  },
+  {
+    "id": 9,
+    "name": "Ivy Chen",
+    "email": "ivy@example.com",
+    "role": "user",
+    "age": 29
+  },
+  {
+    "id": 10,
+    "name": "Jack Turner",
+    "email": "jack@example.com",
+    "role": "user",
+    "age": 35
+  }
+]

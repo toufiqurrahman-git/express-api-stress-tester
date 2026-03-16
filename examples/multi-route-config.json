@@ -1,0 +1,31 @@
+{
+  "baseUrl": "https://jsonplaceholder.typicode.com",
+  "concurrency": 50,
+  "duration": 10,
+  "routes": [
+    {
+      "path": "/posts",
+      "method": "GET"
+    },
+    {
+      "path": "/users",
+      "method": "GET"
+    },
+    {
+      "path": "/posts",
+      "method": "POST",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "payload": {
+        "title": "{name}",
+        "body": "{randomString}"
+      }
+    }
+  ],
+  "trafficDistribution": [
+    { "route": "/posts", "weight": 50 },
+    { "route": "/users", "weight": 30 },
+    { "route": "/posts", "weight": 20 }
+  ]
+}

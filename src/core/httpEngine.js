@@ -176,7 +176,10 @@ function warnInvalidHeaderValue(key, value, warnedHeaderValues) {
     return;
   }
   if (warnedHeaderValues.size >= MAX_WARNED_HEADER_VALUES) {
-    warnedHeaderValues.clear();
+    const oldest = warnedHeaderValues.values().next().value;
+    if (oldest) {
+      warnedHeaderValues.delete(oldest);
+    }
   }
   warnedHeaderValues.add(signature);
   process.stderr.write(

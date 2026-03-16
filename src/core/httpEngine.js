@@ -100,19 +100,36 @@ function normalizeHeaders(headers) {
       continue;
     }
     if (Array.isArray(value)) {
-      const cleaned = value
-        .map((entry) => normalizeHeaderValue(entry))
-        .filter((entry) => entry !== null);
+      const cleaned = [];
+      for (const entry of value) {
+        if (entry === undefined || entry === null) {
+          continue;
+        }
+        if (isValidHeaderValue(entry)) {
+          const cleanedEntry = normalizeHeaderValue(entry);
+          if (cleanedEntry !== null) {
+            cleaned.push(cleanedEntry);
+          }
+        } else {
+          warnInvalidHeaderValue(normalizedKey, entry);
+        }
+      }
       if (cleaned.length > 0) {
         normalized[normalizedKey] = cleaned;
       }
-    } else {
-      const cleanedValue = normalizeHeaderValue(value);
-      if (cleanedValue === null) {
-        continue;
-      }
-      normalized[normalizedKey] = cleanedValue;
+      continue;
     }
+
+    if (!isValidHeaderValue(value)) {
+      warnInvalidHeaderValue(normalizedKey, value);
+      continue;
+    }
+
+    const cleanedValue = normalizeHeaderValue(value);
+    if (cleanedValue === null) {
+      continue;
+    }
+    normalized[normalizedKey] = cleanedValue;
   }
   return normalized;
 }
@@ -131,8 +148,29 @@ function normalizeHeaderValue(value) {
     return cleaned.length > 0 ? cleaned : null;
   }
   if (typeof value === 'number' || typeof value === 'boolean') {
-    const cleaned = String(value).replace(/[\0\r\n]/g, '');
-    return cleaned.length > 0 ? cleaned : null;
+    return String(value);
   }
   return null;
+}
+
+function isValidHeaderValue(value) {
+  return (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  );
+}
+
+const warnedHeaderValues = new Set();
+
+function warnInvalidHeaderValue(key, value) {
+  const type = typeof value;
+  const signature = `${key}:${type}`;
+  if (warnedHeaderValues.has(signature)) {
+    return;
+  }
+  warnedHeaderValues.add(signature);
+  process.stderr.write(
+    `[HttpEngine] Dropping header "${key}" with unsupported value type "${type}".\n`,
+  );
 }

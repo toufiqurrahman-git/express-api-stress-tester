@@ -128,7 +128,8 @@ function normalizeHeaderKey(value) {
 
 function normalizeHeaderValue(value) {
   if (typeof value === 'string') {
-    return value.replace(/[\0\r\n]/g, '');
+    const cleaned = value.replace(/[\0\r\n]/g, '');
+    return cleaned.length > 0 ? cleaned : null;
   }
   if (typeof value === 'number' || typeof value === 'boolean') {
     return String(value);

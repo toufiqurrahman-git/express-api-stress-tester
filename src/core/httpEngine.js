@@ -4,7 +4,31 @@
  * Provides keep-alive, pipelining, and precise response-time tracking
  * via process.hrtime.bigint().
  */
-import { Pool } from 'undici';
+async function ensureWebStreamsGlobals() {
+  if (typeof globalThis.ReadableStream !== 'undefined') return;
+  try {
+    const web = await import('node:stream/web');
+    if (web.ReadableStream && typeof globalThis.ReadableStream === 'undefined') {
+      globalThis.ReadableStream = web.ReadableStream;
+    }
+    if (web.WritableStream && typeof globalThis.WritableStream === 'undefined') {
+      globalThis.WritableStream = web.WritableStream;
+    }
+    if (web.TransformStream && typeof globalThis.TransformStream === 'undefined') {
+      globalThis.TransformStream = web.TransformStream;
+    }
+  } catch {
+    // ignore
+  }
+}
+
+let cachedUndici = null;
+async function getUndici() {
+  if (cachedUndici) return cachedUndici;
+  await ensureWebStreamsGlobals();
+  cachedUndici = await import('undici');
+  return cachedUndici;
+}
 
 const CONTROL_CHARS_REGEX = /[\0\r\n]/g;
 const MAX_WARNED_HEADER_VALUES = 100;
@@ -36,14 +60,28 @@ export class HttpEngine {
     this.timeout = timeout;
     this.invalidHeaderWarningCache = { map: new Map(), queue: [] };
 
-    this.pool = new Pool(baseUrl, {
+    this.pool = null;
+    this.poolPromise = null;
+    this.poolOptions = {
       connections,
       pipelining,
       keepAliveTimeout: 30_000,
       keepAliveMaxTimeout: 60_000,
       headersTimeout: timeout,
       bodyTimeout: timeout,
-    });
+    };
+  }
+
+  async ensurePool() {
+    if (this.pool) return this.pool;
+    if (!this.poolPromise) {
+      this.poolPromise = (async () => {
+        const { Pool } = await getUndici();
+        this.pool = new Pool(this.baseUrl, this.poolOptions);
+        return this.pool;
+      })();
+    }
+    return this.poolPromise;
   }
 
   /**
@@ -57,6 +95,7 @@ export class HttpEngine {
    * @returns {Promise<{ statusCode: number, headers: object, body: string, responseTime: number }>}
    */
   async request({ method = 'GET', path = '/', headers = {}, body = null } = {}) {
+    const pool = await this.ensurePool();
     const mergedHeaders = normalizeHeaders(
       { ...this.defaultHeaders, ...headers },
       this.invalidHeaderWarningCache,
@@ -64,7 +103,7 @@ export class HttpEngine {
 
     const start = process.hrtime.bigint();
 
-    const { statusCode, headers: resHeaders, body: resBody } = await this.pool.request({
+    const { statusCode, headers: resHeaders, body: resBody } = await pool.request({
       method: method.toUpperCase(),
       path,
       headers: mergedHeaders,
@@ -74,7 +113,16 @@ export class HttpEngine {
     });
 
     // Consume the body fully (undici requirement to free the socket)
-    const text = await resBody.text();
+    // Drain via async iteration to avoid depending on Web Streams globals.
+    if (resBody) {
+      try {
+        for await (const _chunk of resBody) {
+          // discard
+        }
+      } catch {
+        // ignore body drain errors
+      }
+    }
 
     const end = process.hrtime.bigint();
     // Convert nanoseconds → milliseconds (floating point)
@@ -83,7 +131,7 @@ export class HttpEngine {
     return {
       statusCode,
       headers: resHeaders,
-      body: text,
+      body: '',
       responseTime,
     };
   }
@@ -92,7 +140,16 @@ export class HttpEngine {
    * Gracefully close the connection pool.
    */
   async close() {
-    await this.pool.close();
+    if (this.pool) {
+      await this.pool.close();
+      return;
+    }
+    if (this.poolPromise) {
+      const pool = await this.poolPromise;
+      if (pool && typeof pool.close === 'function') {
+        await pool.close();
+      }
+    }
   }
 }
 

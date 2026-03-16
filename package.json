@@ -1,6 +1,6 @@
 {
   "name": "express-api-stress-tester",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "description": "High-performance distributed API stress testing platform for Express.js APIs — simulate up to 10M concurrent virtual users",
   "type": "module",
   "main": "src/index.js",

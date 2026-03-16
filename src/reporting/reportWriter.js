@@ -60,19 +60,33 @@ function buildEndpointLines(perEndpoint) {
 
   const lines = [];
   lines.push('Per-Endpoint Metrics:');
-  lines.push('Endpoint                               RPS   Avg(ms)   P95(ms)   Errors(%)');
-  lines.push('-'.repeat(76));
 
   const entries = Object.entries(perEndpoint).sort(
     (a, b) => (b[1].requestsPerSec || 0) - (a[1].requestsPerSec || 0),
   );
+  const maxEndpointLength = Math.min(
+    50,
+    Math.max(8, ...entries.map(([endpoint]) => endpoint.length)),
+  );
+  lines.push(
+    `${'Endpoint'.padEnd(maxEndpointLength)}  RPS   Avg(ms)   P95(ms)   Errors(%)`,
+  );
+  lines.push('-'.repeat(maxEndpointLength + 38));
   for (const [endpoint, metrics] of entries) {
+    const displayEndpoint =
+      endpoint.length > maxEndpointLength
+        ? `${endpoint.slice(0, maxEndpointLength - 3)}...`
+        : endpoint;
     const rps = String(metrics.requestsPerSec ?? 0).padStart(5);
     const avg = String(metrics.avgResponseTime ?? 0).padStart(7);
     const p95 = String(metrics.p95 ?? 0).padStart(7);
-    const err = `${metrics.errorRate ?? 0}`.padStart(7);
+    const errValue =
+      typeof metrics.errorRate === 'string'
+        ? parseFloat(metrics.errorRate)
+        : (metrics.errorRate ?? 0);
+    const err = `${errValue.toFixed(1)}%`.padStart(8);
     lines.push(
-      `${endpoint.padEnd(36)} ${rps} ${avg} ${p95} ${err}`,
+      `${displayEndpoint.padEnd(maxEndpointLength)} ${rps} ${avg} ${p95} ${err}`,
     );
   }
   lines.push('');

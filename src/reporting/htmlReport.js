@@ -52,6 +52,11 @@ export function generateHtmlReport(config, summary) {
   const successRate = summary.successRate || 0;
   const errorRate = summary.errorRate || 0;
   const maxLatency = Math.max(summary.p99 || 0, summary.maxLatency || 0, 1);
+  const maxRps = Math.max(
+    summary.requestsPerSec || 0,
+    ...perEndpointRows.map(([, rps]) => Number(rps) || 0),
+    1,
+  );
   const latencyBars = [
     { label: 'Avg', value: summary.avgResponseTime || 0 },
     { label: 'P95', value: summary.p95 || 0 },
@@ -117,7 +122,7 @@ ${latencyBars.map((bar) => `
       <h3>Request Rate</h3>
       <div class="bar">
         <div class="bar-label">RPS</div>
-        <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100, summary.requestsPerSec)}%"></div></div>
+        <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100, (summary.requestsPerSec / maxRps) * 100)}%"></div></div>
       </div>
     </div>
     <div class="chart">

@@ -344,16 +344,18 @@ function mergeEndpointSummaries(target, source) {
     current.errorRate =
       totalAfter > 0
         ? parseFloat(
-          (((current.errorRate || 0) / 100) * totalBefore +
-            ((metrics.errorRate || 0) / 100) * (metrics.totalRequests || 0)) /
-            totalAfter *
-            100,
+          (
+            (((current.errorRate || 0) / 100) * totalBefore +
+              ((metrics.errorRate || 0) / 100) * (metrics.totalRequests || 0)) /
+              totalAfter *
+              100
+          ).toFixed(1),
         )
         : 0;
     current.successRate = parseFloat((100 - current.errorRate).toFixed(1));
     current.p95 = Math.max(current.p95 || 0, metrics.p95 || 0);
     current.p99 = Math.max(current.p99 || 0, metrics.p99 || 0);
-    current.minLatency = Math.min(current.minLatency ?? Infinity, metrics.minLatency ?? 0);
+    current.minLatency = Math.min(current.minLatency ?? Infinity, metrics.minLatency ?? Infinity);
     current.maxLatency = Math.max(current.maxLatency ?? 0, metrics.maxLatency ?? 0);
   }
 }

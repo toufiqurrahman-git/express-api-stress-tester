@@ -11,7 +11,7 @@
  *   worker → main : { type: 'result', metrics: { ... } }
  */
 import { parentPort, workerData } from 'node:worker_threads';
-import { isAbsolute, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { PluginManager } from '../plugins/pluginManager.js';
 import { HttpEngine } from './httpEngine.js';
@@ -37,13 +37,13 @@ let datasetIndex = 0;
 async function loadPlugins() {
   const plugins = Array.isArray(config.plugins) ? config.plugins : [];
   for (const entry of plugins) {
+    let moduleId = null;
     try {
-      const moduleId = typeof entry === 'string' ? entry : null;
+      moduleId = typeof entry === 'string' ? entry : null;
       if (!moduleId) continue;
-      const isPath = moduleId.startsWith('.') || moduleId.startsWith('/') || isAbsolute(moduleId);
-      const resolved = isPath
-        ? pathToFileURL(isAbsolute(moduleId) ? moduleId : resolve(process.cwd(), moduleId)).href
-        : moduleId;
+      const isPath = moduleId.startsWith('.') || moduleId.startsWith('/');
+      const pluginPath = resolve(process.cwd(), moduleId);
+      const resolved = isPath ? pathToFileURL(pluginPath).href : moduleId;
       const mod = await import(resolved);
       const pluginExport = mod.default || mod.plugin || mod.plugins;
       if (Array.isArray(pluginExport)) {
@@ -54,7 +54,7 @@ async function loadPlugins() {
         pluginManager.registerPlugin(pluginExport);
       }
     } catch (err) {
-      process.stderr.write(`[Worker] Failed to load plugin: ${err.message}\n`);
+      process.stderr.write(`[Worker] Failed to load plugin ${moduleId}: ${err.message}\n`);
     }
   }
 }
@@ -137,7 +137,8 @@ function getEngine(baseUrl) {
 function resolveEndpointKey(method, url, route) {
   const path = route?.path || route?.url;
   if (path && !path.startsWith('http://') && !path.startsWith('https://')) {
-    return `${method} ${path}`;
+    const cleanPath = path.split('?')[0];
+    return `${method} ${cleanPath}`;
   }
   try {
     const parsed = new URL(url);
@@ -157,6 +158,7 @@ function getEndpointMetrics(endpoint) {
       minLatency: Infinity,
       maxLatency: -Infinity,
       responseTimes: [],
+      sampleCount: 0,
     };
   }
   return perEndpoint[endpoint];
@@ -173,14 +175,35 @@ function recordEndpoint(endpoint, elapsedMs, isError) {
   } else {
     metrics.successCount++;
   }
+  metrics.sampleCount++;
   if (metrics.responseTimes.length < MAX_SAMPLE_SIZE) {
     metrics.responseTimes.push(elapsedMs);
   } else {
-    const idx = Math.floor(Math.random() * metrics.totalRequests);
+    const idx = Math.floor(Math.random() * metrics.sampleCount);
     if (idx < MAX_SAMPLE_SIZE) {
       metrics.responseTimes[idx] = elapsedMs;
     }
   }
+}
+
+function recordRequestMetrics({ endpointKey, elapsedMs, isError, status }) {
+  totalRequests++;
+  totalResponseTime += elapsedMs;
+  reservoirSample(elapsedMs);
+  if (elapsedMs < minLatency) minLatency = elapsedMs;
+  if (elapsedMs > maxLatency) maxLatency = elapsedMs;
+
+  if (status) {
+    statusCodes[status] = (statusCodes[status] || 0) + 1;
+  }
+
+  if (isError) {
+    errorCount++;
+  } else {
+    successCount++;
+  }
+
+  recordEndpoint(endpointKey, elapsedMs, isError);
 }
 
 async function applyHeaderPlugins(headers) {
@@ -209,7 +232,7 @@ async function applyPayloadPlugins(payload) {
       if (generated !== undefined && generated !== null) {
         if (merged && typeof merged === 'object' && typeof generated === 'object') {
           merged = { ...merged, ...generated };
-        } else if (merged == null) {
+        } else if (merged === null || merged === undefined) {
           merged = generated;
         }
       }
@@ -298,7 +321,13 @@ async function executeRequest(task) {
     try {
       parsed = new URL(targetUrl);
     } catch {
-      parsed = new URL(targetUrl, config.baseUrl || config.url);
+      try {
+        parsed = new URL(targetUrl, config.baseUrl || config.url);
+      } catch (err) {
+        throw new Error(
+          `Failed to resolve URL "${targetUrl}" with base "${config.baseUrl || config.url}": ${err.message}`,
+        );
+      }
     }
     const engine = getEngine(parsed.origin);
     const res = await engine.request({
@@ -319,24 +348,8 @@ async function executeRequest(task) {
 
   const elapsedMs = Number(process.hrtime.bigint() - startNs) / 1e6;
 
-  totalRequests++;
-  totalResponseTime += elapsedMs;
-  reservoirSample(elapsedMs);
-  if (elapsedMs < minLatency) minLatency = elapsedMs;
-  if (elapsedMs > maxLatency) maxLatency = elapsedMs;
-
-  if (status) {
-    statusCodes[status] = (statusCodes[status] || 0) + 1;
-  }
-
-  if (isError) {
-    errorCount++;
-  } else {
-    successCount++;
-  }
-
   const endpointKey = resolveEndpointKey(targetMethod, targetUrl, route);
-  recordEndpoint(endpointKey, elapsedMs, isError);
+  recordRequestMetrics({ endpointKey, elapsedMs, isError, status });
   await applyMetricsPlugins({
     responseTime: elapsedMs,
     statusCode: status,

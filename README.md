@@ -149,6 +149,7 @@ console.log(result);
 | `rampUp`              | number   | `0`       | Ramp-up time in seconds (linear)                                |
 | `rampDown`            | number   | `0`       | Ramp-down time in seconds (linear)                              |
 | `targetRPS`           | number   | —         | Adaptive target requests/sec                                    |
+| `adaptiveIntervalMs`  | number   | `1000`    | Minimum interval between adaptive adjustments (ms)             |
 | `burst`               | object   | —         | Burst traffic config: `{ start, duration, multiplier, maxUsers }` |
 | `duration`            | number   | `10`      | Test duration in seconds                                        |
 | `routes`              | array    | —         | Array of route objects for multi-route testing                  |

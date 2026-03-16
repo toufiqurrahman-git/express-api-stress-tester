@@ -17,6 +17,7 @@ import { CliDashboard } from '../dashboard/cliDashboard.js';
 
 const BATCH_SIZE = 200;
 const DEFAULT_NUM_WORKERS = Math.max(1, cpus().length - 1);
+const DEFAULT_ADAPTIVE_STEP_PERCENT = 0.05;
 
 /**
  * Run a stress test.
@@ -70,8 +71,13 @@ export async function runStressTest(config, options = {}) {
   const rampDown = config.rampDown || 0;
   const targetRPS = config.targetRPS;
   const burst = config.burst || null;
-  const adaptiveStep = Math.max(1, Math.floor((config.adaptiveStep || maxUsers * 0.05)));
+  const adaptiveStep = Math.max(
+    1,
+    Math.floor((config.adaptiveStep || maxUsers * DEFAULT_ADAPTIVE_STEP_PERCENT)),
+  );
+  const adaptiveIntervalMs = config.adaptiveIntervalMs || 1000;
   let currentConcurrency = Math.min(maxUsers, startConcurrency);
+  let lastAdjustAt = 0;
   const scheduler = new Scheduler(config);
   const metrics = new MetricsCollector();
 
@@ -116,7 +122,7 @@ export async function runStressTest(config, options = {}) {
 
     const now = Date.now();
     const elapsedSeconds = (now - metrics.startTime) / 1000;
-    currentConcurrency = calculateConcurrency({
+    const { current, maxAllowed } = calculateConcurrency({
       elapsedSeconds,
       duration,
       startConcurrency,
@@ -125,18 +131,9 @@ export async function runStressTest(config, options = {}) {
       rampDown,
       burst,
     });
+    currentConcurrency = current;
 
-    const inBurst =
-      burst &&
-      typeof burst === 'object' &&
-      elapsedSeconds >= (burst.start || 0) &&
-      elapsedSeconds <= (burst.start || 0) + (burst.duration || 0);
-    const burstMax = burst && typeof burst === 'object'
-      ? burst.maxUsers || Math.round(maxUsers * (burst.multiplier || 1))
-      : maxUsers;
-    const maxAllowed = inBurst ? burstMax : maxUsers;
-
-    if (targetRPS) {
+    if (targetRPS && now - lastAdjustAt >= adaptiveIntervalMs) {
       const elapsed = (Date.now() - metrics.startTime) / 1000 || 1;
       const currentRps = Math.floor(metrics.totalRequests / elapsed);
       if (currentRps < targetRPS * 0.98) {
@@ -144,6 +141,7 @@ export async function runStressTest(config, options = {}) {
       } else if (currentRps > targetRPS * 1.02) {
         currentConcurrency = Math.max(1, currentConcurrency - adaptiveStep);
       }
+      lastAdjustAt = now;
     }
 
     const batchLimit = Math.min(BATCH_SIZE, Math.ceil(currentConcurrency / numWorkers));
@@ -245,9 +243,18 @@ function calculateConcurrency({
   burst,
 }) {
   let desired = maxUsers;
-  const maxAllowed = burst && typeof burst === 'object' && burst.maxUsers
-    ? burst.maxUsers
+  const isBurstConfig = burst && typeof burst === 'object';
+  const burstStart = isBurstConfig ? (burst.start || 0) : 0;
+  const burstDuration = isBurstConfig ? (burst.duration || 0) : 0;
+  const burstMultiplier = isBurstConfig ? (burst.multiplier || 1) : 1;
+  const burstMax = isBurstConfig
+    ? burst.maxUsers || Math.round(maxUsers * burstMultiplier)
     : maxUsers;
+  const inBurst =
+    isBurstConfig &&
+    elapsedSeconds >= burstStart &&
+    elapsedSeconds <= burstStart + burstDuration;
+  const maxAllowed = inBurst ? burstMax : maxUsers;
   if (rampUp && elapsedSeconds < rampUp) {
     const progress = elapsedSeconds / rampUp;
     desired = Math.max(
@@ -262,15 +269,9 @@ function calculateConcurrency({
     desired = Math.max(1, Math.round(startConcurrency + (maxUsers - startConcurrency) * progress));
   }
 
-  if (burst && typeof burst === 'object') {
-    const start = burst.start || 0;
-    const burstDuration = burst.duration || 0;
-    const multiplier = burst.multiplier || 1;
-    const burstMax = burst.maxUsers || Math.round(maxUsers * multiplier);
-    if (elapsedSeconds >= start && elapsedSeconds <= start + burstDuration) {
-      desired = Math.min(burstMax, Math.round(desired * multiplier));
-    }
+  if (inBurst) {
+    desired = Math.min(burstMax, Math.round(desired * burstMultiplier));
   }
 
-  return Math.min(maxAllowed, Math.max(1, desired));
+  return { current: Math.min(maxAllowed, Math.max(1, desired)), maxAllowed };
 }

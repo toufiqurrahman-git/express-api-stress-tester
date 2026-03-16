@@ -18,6 +18,7 @@ import { ReportWriter } from './reporting/reportWriter.js';
 
 const require = createRequire(import.meta.url);
 const pkg = require('../package.json');
+const DEFAULT_MAX_ERROR_RATE_PERCENT = 5;
 
 function loadConfig(configPath) {
   const fullPath = resolve(configPath);
@@ -121,7 +122,7 @@ async function waitForWorkers(master, count, timeoutMs) {
 
 function applyThresholds(summary, thresholds) {
   if (!thresholds) {
-    return summary.errorRate < 5 ? 'PASSED' : 'FAILED';
+    return summary.errorRate < DEFAULT_MAX_ERROR_RATE_PERCENT ? 'PASSED' : 'FAILED';
   }
 
   if (

@@ -13,6 +13,7 @@ describe('CliDashboard', () => {
     expect(dash.metrics.totalRequests).toBe(0);
     expect(dash.metrics.p95).toBe(0);
     expect(dash.metrics.p99).toBe(0);
+    expect(dash.metrics.perEndpoint).toEqual({});
     expect(dash.rpsHistory).toEqual([]);
   });
 

@@ -18,6 +18,7 @@ export class Scheduler {
     this.scenarios = config.scenarios || [];
     this.weights = this._buildWeights();
     this.roundRobinIndex = 0;
+    this.scenarioIndex = 0;
   }
 
   // ── Route resolution ───────────────────────────────────────────────
@@ -154,5 +155,18 @@ export class Scheduler {
   getScenarioSteps() {
     if (this.scenarios.length === 0) return [];
     return this.scenarios[0].steps || [];
+  }
+
+  /**
+   * Return the next scenario in round-robin order.
+   * @returns {object} scenario
+   */
+  getNextScenario() {
+    if (this.scenarios.length === 0) {
+      return { name: 'default', steps: [] };
+    }
+    const scenario = this.scenarios[this.scenarioIndex % this.scenarios.length];
+    this.scenarioIndex = (this.scenarioIndex + 1) % this.scenarios.length;
+    return scenario;
   }
 }

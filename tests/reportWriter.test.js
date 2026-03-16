@@ -27,6 +27,19 @@ const sampleSummary = {
   memoryMB: '256.0',
   result: 'PASSED',
   elapsedSeconds: '10.0',
+  perEndpoint: {
+    'GET /users': {
+      totalRequests: 500,
+      requestsPerSec: 50,
+      avgResponseTime: 40,
+      p95: 80,
+      p99: 120,
+      minLatency: 10,
+      maxLatency: 200,
+      errorRate: 1.0,
+      successRate: 99.0,
+    },
+  },
 };
 
 let tempDir;
@@ -63,6 +76,8 @@ describe('ReportWriter', () => {
     expect(content).toContain('P99 Latency');
     expect(content).toContain('Min Latency');
     expect(content).toContain('Max Latency');
+    expect(content).toContain('Per-Endpoint Metrics');
+    expect(content).toContain('GET /users');
     expect(report).toBe(content);
   });
 
@@ -93,6 +108,7 @@ describe('ReportWriter', () => {
     expect(content).toContain('PASSED');
     expect(content).toContain('1000');
     expect(content).toContain('http://localhost:3000/api/test');
+    expect(content).toContain('Per-Endpoint Metrics');
     expect(html).toBe(content);
   });
 

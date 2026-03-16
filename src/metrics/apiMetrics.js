@@ -1,34 +1,18 @@
 /**
- * Enhanced metrics collector with percentile support (v2).
- * Backward-compatible with v1 API, adds reservoir sampling for latency percentiles.
+ * Per-endpoint metrics collector with percentile support.
  */
-import { cpus } from 'node:os';
-import { ApiMetrics } from './apiMetrics.js';
+const RESERVOIR_SIZE = 5_000;
 
-const RESERVOIR_SIZE = 10_000;
-
-export class MetricsCollector {
+export class ApiMetrics {
   constructor() {
     this.totalRequests = 0;
     this.successCount = 0;
     this.errorCount = 0;
     this.totalResponseTime = 0;
-    this.startTime = 0;
-    this.endTime = 0;
     this.minLatency = Infinity;
     this.maxLatency = -Infinity;
-    // Reservoir sampling for percentile calculation
     this.responseTimes = [];
     this._sampleCount = 0;
-    this.perEndpoint = new Map();
-  }
-
-  start() {
-    this.startTime = Date.now();
-  }
-
-  stop() {
-    this.endTime = Date.now();
   }
 
   record(responseTimeMs, isError) {
@@ -44,7 +28,6 @@ export class MetricsCollector {
       this.successCount++;
     }
 
-    // Reservoir sampling (Algorithm R)
     this._sampleCount++;
     if (this.responseTimes.length < RESERVOIR_SIZE) {
       this.responseTimes.push(responseTimeMs);
@@ -72,12 +55,6 @@ export class MetricsCollector {
     if (partial.responseTimes) {
       this.mergeResponseTimes(partial.responseTimes);
     }
-
-    if (partial.perEndpoint) {
-      for (const [endpoint, metrics] of Object.entries(partial.perEndpoint)) {
-        this._getEndpointMetrics(endpoint).merge(metrics);
-      }
-    }
   }
 
   mergeResponseTimes(times) {
@@ -95,37 +72,14 @@ export class MetricsCollector {
     }
   }
 
-  _getEndpointMetrics(endpoint) {
-    if (!this.perEndpoint.has(endpoint)) {
-      this.perEndpoint.set(endpoint, new ApiMetrics());
-    }
-    return this.perEndpoint.get(endpoint);
-  }
-
-  static getResourceUsage() {
-    const mem = process.memoryUsage();
-    const cpuArray = cpus();
-    let totalIdle = 0;
-    let totalTick = 0;
-    for (const cpu of cpuArray) {
-      const { user, nice, sys, idle, irq } = cpu.times;
-      totalTick += user + nice + sys + idle + irq;
-      totalIdle += idle;
-    }
-    const cpuPercent = ((1 - totalIdle / totalTick) * 100).toFixed(1);
-    const memoryMB = (mem.heapUsed / 1024 / 1024).toFixed(1);
-    return { cpuPercent, memoryMB };
-  }
-
   _percentile(sorted, p) {
     if (sorted.length === 0) return 0;
     const idx = Math.ceil((p / 100) * sorted.length) - 1;
     return sorted[Math.max(0, idx)];
   }
 
-  getSummary(thresholds) {
-    const endTime = this.endTime || Date.now();
-    const elapsed = (endTime - this.startTime) / 1000 || 1;
+  getSummary(elapsedSeconds = 1) {
+    const elapsed = elapsedSeconds || 1;
     const rps = (this.totalRequests / elapsed).toFixed(0);
     const avgResponse =
       this.totalRequests > 0
@@ -140,9 +94,6 @@ export class MetricsCollector {
         ? ((this.successCount / this.totalRequests) * 100).toFixed(1)
         : '0.0';
 
-    const { cpuPercent, memoryMB } = MetricsCollector.getResourceUsage();
-
-    // Percentile calculations from reservoir
     const sorted = [...this.responseTimes].sort((a, b) => a - b);
     const p95 = this._percentile(sorted, 95);
     const p99 = this._percentile(sorted, 99);
@@ -150,50 +101,16 @@ export class MetricsCollector {
     const minLat = this.minLatency === Infinity ? 0 : this.minLatency;
     const maxLat = this.maxLatency === -Infinity ? 0 : this.maxLatency;
 
-    // Determine pass/fail
-    const errRateNum = parseFloat(errorRate);
-    const rpsNum = Number(rps);
-    const avgNum = Number(avgResponse);
-
-    let passed;
-    if (thresholds) {
-      passed = true;
-      if (thresholds.maxErrorRate !== undefined && errRateNum > thresholds.maxErrorRate) {
-        passed = false;
-      }
-      if (thresholds.maxAvgLatency !== undefined && avgNum > thresholds.maxAvgLatency) {
-        passed = false;
-      }
-      if (thresholds.minRPS !== undefined && rpsNum < thresholds.minRPS) {
-        passed = false;
-      }
-    } else {
-      passed = errRateNum < 5;
-    }
-
     return {
       totalRequests: this.totalRequests,
-      requestsPerSec: rpsNum,
-      avgResponseTime: avgNum,
+      requestsPerSec: Number(rps),
+      avgResponseTime: Number(avgResponse),
       p95,
       p99,
       minLatency: minLat,
       maxLatency: maxLat,
-      errorRate: errRateNum,
+      errorRate: parseFloat(errorRate),
       successRate: parseFloat(successRate),
-      cpuPercent,
-      memoryMB,
-      result: passed ? 'PASSED' : 'FAILED',
-      elapsedSeconds: elapsed.toFixed(1),
-      perEndpoint: this._buildEndpointSummaries(elapsed),
     };
-  }
-
-  _buildEndpointSummaries(elapsed) {
-    const summaries = {};
-    for (const [endpoint, metrics] of this.perEndpoint.entries()) {
-      summaries[endpoint] = metrics.getSummary(elapsed);
-    }
-    return summaries;
   }
 }

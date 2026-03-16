@@ -13,7 +13,8 @@ import { createRequire } from 'node:module';
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { runStressTest } from './core/runner.js';
-import { CliDashboard } from './dashboard/cliDashboard.js';
+import { MasterNode, WorkerNode } from './core/distributedCoordinator.js';
+import { ReportWriter } from './reporting/reportWriter.js';
 
 const require = createRequire(import.meta.url);
 const pkg = require('../package.json');
@@ -51,12 +52,6 @@ function printSummary(summary) {
 async function runCommand(configPath, opts) {
   const config = loadConfig(configPath);
 
-  let dashboard = null;
-  if (opts.dashboard) {
-    dashboard = new CliDashboard();
-    dashboard.start();
-  }
-
   try {
     const summary = await runStressTest(config, {
       reportPath: opts.output || 'stress-test-report.txt',
@@ -64,17 +59,93 @@ async function runCommand(configPath, opts) {
       dashboard: opts.dashboard,
     });
 
-    if (dashboard) {
-      dashboard.stop();
-    }
-
     printSummary(summary);
     process.exit(summary.result === 'PASSED' ? 0 : 1);
   } catch (err) {
-    if (dashboard) dashboard.stop();
     console.error(chalk.red(`Stress test failed: ${err.message}`));
     process.exit(1);
   }
+}
+
+async function masterCommand(configPath, opts) {
+  const config = loadConfig(configPath);
+  const master = new MasterNode({ port: Number(opts.port) || 7654 });
+  await master.start();
+  console.log(chalk.green(`Master listening on port ${master.port}`));
+
+  const expected = Number(opts.workers || config.distributed?.workers || 0);
+  if (expected > 0) {
+    await waitForWorkers(master, expected, opts.timeout ? Number(opts.timeout) * 1000 : 60_000);
+  }
+
+  const results = await master.distributeWork(config);
+  const summary = await master.collectResults(results);
+  summary.result = applyThresholds(summary, config.thresholds);
+
+  const reportPath = opts.output || 'stress-test-report.txt';
+  const reportFormat = opts.format || 'txt';
+  const writer = new ReportWriter(config, summary);
+  writer.write(reportPath, reportFormat);
+
+  printSummary(summary);
+  await master.stop();
+  process.exit(summary.result === 'PASSED' ? 0 : 1);
+}
+
+async function workerCommand(opts) {
+  const worker = new WorkerNode({
+    masterHost: opts.host || '127.0.0.1',
+    masterPort: Number(opts.port) || 7654,
+  });
+  await worker.connect();
+  console.log(chalk.green(`Worker connected to ${worker.masterHost}:${worker.masterPort}`));
+  await new Promise((resolve) => {
+    if (worker.socket) {
+      worker.socket.on('close', resolve);
+    } else {
+      resolve();
+    }
+  });
+  process.exit(0);
+}
+
+async function waitForWorkers(master, count, timeoutMs) {
+  const start = Date.now();
+  while (master.workers.size < count) {
+    if (timeoutMs && Date.now() - start > timeoutMs) {
+      throw new Error(`Timed out waiting for ${count} workers to connect`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+}
+
+function applyThresholds(summary, thresholds) {
+  if (!thresholds) {
+    return summary.errorRate < 5 ? 'PASSED' : 'FAILED';
+  }
+
+  if (
+    thresholds.maxErrorRate != null &&
+    summary.errorRate > thresholds.maxErrorRate
+  ) {
+    return 'FAILED';
+  }
+
+  if (
+    thresholds.maxAvgLatency != null &&
+    summary.avgResponseTime > thresholds.maxAvgLatency
+  ) {
+    return 'FAILED';
+  }
+
+  if (
+    thresholds.minRPS != null &&
+    summary.requestsPerSec < thresholds.minRPS
+  ) {
+    return 'FAILED';
+  }
+
+  return 'PASSED';
 }
 
 async function main() {
@@ -93,9 +164,35 @@ async function main() {
     .option('--output <path>', 'Report output file path')
     .action(runCommand);
 
+  program
+    .command('master <config>')
+    .description('Run a distributed master and coordinate connected workers')
+    .option('--port <port>', 'Master listen port', '7654')
+    .option('--workers <count>', 'Number of workers to wait for')
+    .option('--timeout <seconds>', 'Wait timeout for workers', '60')
+    .option('--format <format>', 'Report format: txt, json, html', 'txt')
+    .option('--output <path>', 'Report output file path')
+    .action(masterCommand);
+
+  program
+    .command('worker')
+    .description('Start a worker node and connect to a master')
+    .option('--host <host>', 'Master host', '127.0.0.1')
+    .option('--port <port>', 'Master port', '7654')
+    .action(workerCommand);
+
   // Backward compatibility: if first arg is not a known command, treat as config path
   const args = process.argv.slice(2);
-  const knownCommands = ['run', 'help', '--help', '-h', '--version', '-V'];
+  const knownCommands = [
+    'run',
+    'master',
+    'worker',
+    'help',
+    '--help',
+    '-h',
+    '--version',
+    '-V',
+  ];
   if (args.length > 0 && !knownCommands.includes(args[0])) {
     // Rewrite argv to include 'run' subcommand
     const configArg = args[0];

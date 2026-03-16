@@ -1,8 +1,8 @@
 /**
  * Tests for metrics collection, report generation, and runner validation.
  */
-import { MetricsCollector } from '../src/metrics.js';
-import { writeReport } from '../src/logger.js';
+import { MetricsCollector } from '../src/metrics/metricsCollector.js';
+import { writeReport } from '../src/reporting/reportWriter.js';
 import { unlinkSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -143,8 +143,10 @@ describe('writeReport', () => {
 describe('runner validation', () => {
   test('runStressTest rejects missing url', async () => {
     // Dynamic import to avoid issues with worker thread paths in test
-    const { runStressTest } = await import('../src/runner.js');
-    await expect(runStressTest({})).rejects.toThrow('config.url is required');
-    await expect(runStressTest(null)).rejects.toThrow('config.url is required');
+    const { runStressTest } = await import('../src/core/runner.js');
+    await expect(runStressTest({})).rejects.toThrow(
+      'config.url, config.routes, or config.scenarios is required',
+    );
+    await expect(runStressTest(null)).rejects.toThrow('config is required');
   });
 });

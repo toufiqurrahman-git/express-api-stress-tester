@@ -150,6 +150,7 @@ export class MasterNode {
       errorRate: 0,
       successRate: 0,
       result: 'PASSED',
+      perEndpoint: {},
     };
 
     let totalResponseTimeWeighted = 0;
@@ -158,6 +159,9 @@ export class MasterNode {
       combined.totalRequests += r.totalRequests || 0;
       combined.requestsPerSec += r.requestsPerSec || 0;
       totalResponseTimeWeighted += (r.avgResponseTime || 0) * (r.totalRequests || 0);
+      if (r.perEndpoint) {
+        mergeEndpointSummaries(combined.perEndpoint, r.perEndpoint);
+      }
     }
 
     if (combined.totalRequests > 0) {
@@ -305,5 +309,51 @@ export class WorkerNode {
         resolve();
       }
     });
+  }
+}
+
+function mergeEndpointSummaries(target, source) {
+  for (const [endpoint, metrics] of Object.entries(source)) {
+    if (!target[endpoint]) {
+      target[endpoint] = {
+        totalRequests: 0,
+        requestsPerSec: 0,
+        avgResponseTime: 0,
+        errorRate: 0,
+        successRate: 0,
+        p95: 0,
+        p99: 0,
+        minLatency: metrics.minLatency ?? 0,
+        maxLatency: metrics.maxLatency ?? 0,
+      };
+    }
+
+    const current = target[endpoint];
+    const totalBefore = current.totalRequests;
+    const totalAfter = totalBefore + (metrics.totalRequests || 0);
+
+    current.totalRequests = totalAfter;
+    current.requestsPerSec += metrics.requestsPerSec || 0;
+    current.avgResponseTime =
+      totalAfter > 0
+        ? Math.round(
+          ((current.avgResponseTime || 0) * totalBefore +
+            (metrics.avgResponseTime || 0) * (metrics.totalRequests || 0)) / totalAfter,
+        )
+        : 0;
+    current.errorRate =
+      totalAfter > 0
+        ? parseFloat(
+          (((current.errorRate || 0) / 100) * totalBefore +
+            ((metrics.errorRate || 0) / 100) * (metrics.totalRequests || 0)) /
+            totalAfter *
+            100,
+        )
+        : 0;
+    current.successRate = parseFloat((100 - current.errorRate).toFixed(1));
+    current.p95 = Math.max(current.p95 || 0, metrics.p95 || 0);
+    current.p99 = Math.max(current.p99 || 0, metrics.p99 || 0);
+    current.minLatency = Math.min(current.minLatency ?? Infinity, metrics.minLatency ?? 0);
+    current.maxLatency = Math.max(current.maxLatency ?? 0, metrics.maxLatency ?? 0);
   }
 }

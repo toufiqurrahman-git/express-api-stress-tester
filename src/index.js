@@ -21,6 +21,7 @@ export { DatasetLoader } from './payload/datasetLoader.js';
 
 // Metrics
 export { MetricsCollector } from './metrics/metricsCollector.js';
+export { ApiMetrics } from './metrics/apiMetrics.js';
 export { SystemMetrics } from './metrics/systemMetrics.js';
 
 // Reporting

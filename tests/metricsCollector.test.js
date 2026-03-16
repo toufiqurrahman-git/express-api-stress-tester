@@ -73,6 +73,33 @@ describe('MetricsCollector (v2)', () => {
     expect(m.responseTimes).toHaveLength(6);
   });
 
+  test('merge() aggregates per-endpoint metrics', () => {
+    const m = new MetricsCollector();
+    m.start();
+    m.merge({
+      totalRequests: 2,
+      successCount: 2,
+      errorCount: 0,
+      totalResponseTime: 200,
+      perEndpoint: {
+        'GET /users': {
+          totalRequests: 2,
+          successCount: 2,
+          errorCount: 0,
+          totalResponseTime: 200,
+          minLatency: 90,
+          maxLatency: 110,
+          responseTimes: [90, 110],
+        },
+      },
+    });
+    m.endTime = m.startTime + 1000;
+
+    const summary = m.getSummary();
+    expect(summary.perEndpoint).toHaveProperty('GET /users');
+    expect(summary.perEndpoint['GET /users'].totalRequests).toBe(2);
+  });
+
   test('merge() updates min/max when partial has better values', () => {
     const m = new MetricsCollector();
     m.record(50, false); // min=50, max=50

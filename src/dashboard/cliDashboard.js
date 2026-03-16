@@ -28,6 +28,7 @@ export class CliDashboard {
       totalRequests: 0,
       p95: 0,
       p99: 0,
+      perEndpoint: {},
     };
     this.rpsHistory = [];
     this.startTime = null;
@@ -84,6 +85,7 @@ export class CliDashboard {
     output += `${BOLD}${CYAN}═══════════════════════════════════════════════${RESET}\n`;
     output += `${DIM}  Elapsed: ${elapsed}s${RESET}\n\n`;
     output += table.toString() + '\n\n';
+    output += this._renderEndpointTable();
     output += this._renderBarChart();
     output += `\n  ${BOLD}Total Requests:${RESET} ${m.totalRequests}\n`;
 
@@ -110,6 +112,38 @@ export class CliDashboard {
 
     chart += `  ${DIM}     0${RESET} └${'─'.repeat(history.length)}\n`;
     return chart;
+  }
+
+  _renderEndpointTable() {
+    const endpoints = this.metrics.perEndpoint || {};
+    const entries = Object.entries(endpoints);
+    if (entries.length === 0) return '';
+
+    const table = new Table({
+      head: [
+        `${CYAN}Endpoint${RESET}`,
+        `${CYAN}RPS${RESET}`,
+        `${CYAN}Avg Lat${RESET}`,
+        `${CYAN}Errors${RESET}`,
+      ],
+      colWidths: [30, 8, 12, 10],
+      style: { head: [], border: [] },
+    });
+
+    const sorted = entries.sort(
+      (a, b) => (b[1].requestsPerSec || 0) - (a[1].requestsPerSec || 0),
+    );
+
+    for (const [endpoint, metrics] of sorted.slice(0, 10)) {
+      table.push([
+        endpoint,
+        metrics.requestsPerSec || 0,
+        `${metrics.avgResponseTime || 0}ms`,
+        `${metrics.errorRate || 0}%`,
+      ]);
+    }
+
+    return `${BOLD}${CYAN}Per-Endpoint Metrics${RESET}\n${table.toString()}\n\n`;
   }
 }
 

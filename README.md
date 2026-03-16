@@ -14,8 +14,10 @@
 - 🔀 **Distributed architecture** — master/worker TCP coordination for horizontal scaling
 - 📊 **Real-time terminal dashboard** — live RPS, latency, error rate, CPU, and memory graphs
 - 🎯 **Multi-route testing** — test multiple endpoints with weighted traffic distribution
+- 🧭 **Per-endpoint analytics** — separate metrics per API route
 - 🎭 **Scenario testing** — simulate real user flows across sequential API calls
 - 📈 **Advanced metrics** — P95, P99, min, max latency with reservoir sampling
+- 📶 **Adaptive load engine** — ramp-up, ramp-down, target RPS, burst traffic
 - 📝 **Multi-format reports** — TXT, JSON, and HTML reports with pass/fail status
 - 🔌 **Plugin system** — payload generators, auth providers, header providers, interceptors, and custom metrics collectors
 - 🧪 **Express integration** — auto-detect routes and stress test Express apps directly
@@ -142,11 +144,18 @@ console.log(result);
 | `payloads`            | array    | —         | Bulk payloads — array of objects distributed round-robin        |
 | `payloadFile`         | string   | —         | Path to a CSV or JSON dataset file                              |
 | `concurrency`         | number   | `1`       | Number of concurrent virtual users                              |
+| `maxUsers`            | number   | —         | Alias for `concurrency` when using adaptive ramping             |
+| `startConcurrency`    | number   | `1`       | Initial concurrency for ramp-up                                 |
+| `rampUp`              | number   | `0`       | Ramp-up time in seconds (linear)                                |
+| `rampDown`            | number   | `0`       | Ramp-down time in seconds (linear)                              |
+| `targetRPS`           | number   | —         | Adaptive target requests/sec                                    |
+| `burst`               | object   | —         | Burst traffic config: `{ start, duration, multiplier, maxUsers }` |
 | `duration`            | number   | `10`      | Test duration in seconds                                        |
 | `routes`              | array    | —         | Array of route objects for multi-route testing                  |
 | `trafficDistribution` | array    | —         | Weighted traffic distribution across routes                     |
 | `scenarios`           | array    | —         | Scenario definitions for user flow simulation                   |
 | `thresholds`          | object   | —         | Pass/fail thresholds                                            |
+| `plugins`             | array    | —         | Plugin module paths to load in worker threads                   |
 
 ### Single URL Config
 
@@ -203,6 +212,22 @@ Test multiple API endpoints simultaneously with optional weighted traffic distri
 
 ---
 
+## Per-Endpoint Metrics
+
+When multiple routes or scenarios are tested, the report and dashboard include **separate metrics per API endpoint** (RPS, latency, error rate).
+
+Example snippet from the TXT report:
+
+```
+Per-Endpoint Metrics:
+Endpoint                               RPS   Avg(ms)   P95(ms)   Errors(%)
+----------------------------------------------------------------------------
+GET /login                             5200     120       210      0.5
+POST /orders                           3100     210       410      1.3
+```
+
+---
+
 ## Scenario Testing
 
 Simulate real user flows by defining sequential steps that execute in order.
@@ -231,6 +256,25 @@ Simulate real user flows by defining sequential steps that execute in order.
 ```
 
 Each virtual user executes the steps sequentially, simulating a realistic browsing or API consumption pattern.
+
+---
+
+## Adaptive Load & Burst Traffic
+
+Use ramp-up, ramp-down, target RPS, and burst windows to shape traffic patterns.
+
+```json
+{
+  "baseUrl": "https://api.example.com",
+  "routes": [{ "path": "/login", "method": "POST" }],
+  "maxUsers": 100000,
+  "startConcurrency": 1000,
+  "rampUp": 30,
+  "rampDown": 10,
+  "targetRPS": 50000,
+  "burst": { "start": 20, "duration": 5, "multiplier": 2 }
+}
+```
 
 ---
 
@@ -381,6 +425,16 @@ When thresholds are set, the summary `result` field returns `PASSED` or `FAILED`
 ## Distributed Mode
 
 Scale horizontally across multiple machines using the built-in TCP-based master/worker coordination.
+
+### CLI Usage
+
+```bash
+# Start master with config
+npx express-api-stress-tester master config.json --port 7654 --workers 3
+
+# Start workers (run on other machines)
+npx express-api-stress-tester worker --host 127.0.0.1 --port 7654
+```
 
 ### Master Node
 
@@ -547,6 +601,18 @@ const headers = authPlugins[0].handler();
 console.log(headers); // { Authorization: 'Bearer my-secret-token' }
 ```
 
+### Loading Plugins via Config
+
+```json
+{
+  "url": "https://api.example.com/users",
+  "method": "GET",
+  "concurrency": 100,
+  "duration": 10,
+  "plugins": ["./plugins/authPlugin.js", "./plugins/requestLogger.js"]
+}
+```
+
 ---
 
 ## Real-Time Dashboard
@@ -574,6 +640,7 @@ The dashboard displays:
 - Updates every 1 second
 - Color-coded indicators: 🟢 green (healthy), 🟡 yellow (warning), 🔴 red (critical)
 - 60-second RPS history with ASCII bar chart
+- Per-endpoint table with live RPS, latency, and error rate
 - Clean exit on test completion
 
 ---
@@ -640,7 +707,15 @@ Result:             PASSED
     "maxLatency": 320,
     "errorRate": 0.3,
     "successRate": 99.7,
-    "result": "PASSED"
+    "result": "PASSED",
+    "perEndpoint": {
+      "GET /users": {
+        "requestsPerSec": 620,
+        "avgResponseTime": 35,
+        "p95": 80,
+        "errorRate": 0.2
+      }
+    }
   }
 }
 ```
@@ -652,6 +727,8 @@ The HTML report is a self-contained file with:
 - Status badge (✓ PASSED or ✗ FAILED)
 - Test configuration table
 - Results summary table with all metrics
+- Latency, request rate, and error distribution charts
+- Per-endpoint metrics table
 - Timestamp of generation
 - Embedded CSS — no external dependencies
 
@@ -690,6 +767,7 @@ express-api-stress-tester/
 │   │
 │   ├── metrics/
 │   │   ├── metricsCollector.js           # Metrics aggregation + percentiles
+│   │   ├── apiMetrics.js                 # Per-endpoint metrics collector
 │   │   └── systemMetrics.js              # CPU & memory monitoring
 │   │
 │   ├── reporting/

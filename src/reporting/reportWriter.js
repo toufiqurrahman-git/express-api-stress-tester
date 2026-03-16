@@ -47,9 +47,36 @@ function buildTxtReport(config, summary) {
     `Memory Usage:       ${summary.memoryMB}MB`,
     `Result:             ${summary.result}`,
     divider,
+    ...(buildEndpointLines(summary.perEndpoint) || []),
     '',
   ];
   return lines.join('\n');
+}
+
+function buildEndpointLines(perEndpoint) {
+  if (!perEndpoint || Object.keys(perEndpoint).length === 0) {
+    return [];
+  }
+
+  const lines = [];
+  lines.push('Per-Endpoint Metrics:');
+  lines.push('Endpoint                               RPS   Avg(ms)   P95(ms)   Errors(%)');
+  lines.push('-'.repeat(76));
+
+  const entries = Object.entries(perEndpoint).sort(
+    (a, b) => (b[1].requestsPerSec || 0) - (a[1].requestsPerSec || 0),
+  );
+  for (const [endpoint, metrics] of entries) {
+    const rps = String(metrics.requestsPerSec ?? 0).padStart(5);
+    const avg = String(metrics.avgResponseTime ?? 0).padStart(7);
+    const p95 = String(metrics.p95 ?? 0).padStart(7);
+    const err = `${metrics.errorRate ?? 0}`.padStart(7);
+    lines.push(
+      `${endpoint.padEnd(36)} ${rps} ${avg} ${p95} ${err}`,
+    );
+  }
+  lines.push('');
+  return lines;
 }
 
 export class ReportWriter {

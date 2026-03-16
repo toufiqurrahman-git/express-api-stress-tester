@@ -131,7 +131,8 @@ function normalizeHeaderValue(value) {
     return cleaned.length > 0 ? cleaned : null;
   }
   if (typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
+    const cleaned = String(value).replace(/[\0\r\n]/g, '');
+    return cleaned.length > 0 ? cleaned : null;
   }
   return null;
 }

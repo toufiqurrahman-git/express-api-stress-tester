@@ -58,14 +58,16 @@ describe('HttpEngine', () => {
     await engine.request({
       headers: {
         'X-Test': 'line1\nline2',
-        'X-Multi': ['one\r', 'two\nthree'],
+        'X-Multi': ['one\r', 'two\nthree', 'null\0value'],
+        'X-Null\0Key': 'value\0here',
       },
     });
 
     expect(capturedHeaders).toEqual({
       Authorization: 'Bearer token',
       'X-Test': 'line1line2',
-      'X-Multi': ['one', 'twothree'],
+      'X-Multi': ['one', 'twothree', 'nullvalue'],
+      'X-NullKey': 'valuehere',
     });
 
     await engine.close();
